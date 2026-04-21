@@ -4,8 +4,8 @@ import axios from "axios";
 const app = express();
 app.use(express.json());
 
-const LINE_TOKEN = "ここにLINEのチャネルアクセストークン";
-const DIFY_API = "ここにDifyのAPIキー";
+const LINE_TOKEN = "HEuVoiDoRD7zv2HEkMTfarcOe9WWz2UeTMWsoJ/mW86T7W1ilyu4VANUYwGb/+whQFSQw1YI+YaJXypc2zr3xhlGhNbc2WD+UOE4ALXxftot9ENIrXGCrgKS9BPlpkia+hNRnSmwyeeTAF+4W8N1lAdB04t89/1O/w1cDnyilFU=";
+const DIFY_API = "app-HA2MtGjEj13YLYjnMR1rRVNt";
 
 app.post("/webhook", async (req, res) => {
   try {
