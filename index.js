@@ -6,9 +6,9 @@ import FormData from "form-data";
 const app = express();
 app.use(express.json());
 
-const LINE_TOKEN = "HEuVoiDoRD7zv2HEkMTfarcOe9WWz2UeTMWsoJ/mW86T7W1ilyu4VANUYwGb/+whQFSQw1YI+YaJXypc2zr3xhlGhNbc2WD+UOE4ALXxftot9ENIrXGCrgKS9BPlpkia+hNRnSmwyeeTAF+4W8N1lAdB04t89/1O/w1cDnyilFU=";
-const DIFY_API = "app-HA2MtGjEj13YLYjnMR1rRVNt";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const DIFY_API = process.env.DIFY_API;
+const LINE_TOKEN = process.env.LINE_TOKEN;
 
 // ■ 音声ファイル公開（超重要）
 app.use(express.static("."));
