@@ -6,35 +6,39 @@ import FormData from "form-data";
 const app = express();
 app.use(express.json());
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const DIFY_API = process.env.DIFY_API;
+// ■ 環境変数（Renderで設定済みのものを使用）
 const LINE_TOKEN = process.env.LINE_TOKEN;
+const DIFY_API = process.env.DIFY_API;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// ■ 音声ファイル公開（超重要）
+// ■ 音声ファイル公開（audio返信用）
 app.use(express.static("."));
 
 app.post("/webhook", async (req, res) => {
   try {
     const events = req.body.events;
 
-    // eventsが無い場合（検証対策）
+    // ■ eventsなし（検証対策）
     if (!events || events.length === 0) {
       return res.sendStatus(200);
     }
 
     const event = events[0];
 
-    // messageが無い場合
+    // ■ messageなし対策
     if (!event.message) {
       return res.sendStatus(200);
     }
 
     let userText = "";
+    let replyType = "text"; // デフォルト
 
     // =========================
-    // ■ 音声メッセージ対応
+    // ■ 音声メッセージ
     // =========================
     if (event.message.type === "audio") {
+      replyType = "audio";
+
       const messageId = event.message.id;
 
       // LINEから音声取得
@@ -68,9 +72,10 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========================
-    // ■ テキストメッセージ対応
+    // ■ テキストメッセージ
     // =========================
     else if (event.message.type === "text") {
+      replyType = "text";
       userText = event.message.text;
     } else {
       return res.sendStatus(200);
@@ -98,50 +103,74 @@ app.post("/webhook", async (req, res) => {
       difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
     // =========================
-    // ■ 音声生成（TTS）
+    // ■ 音声で返す
     // =========================
-    const ttsRes = await axios.post(
-      "https://api.openai.com/v1/audio/speech",
-      {
-        model: "gpt-4o-mini-tts",
-        voice: "alloy",
-        input: answer
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`
+    if (replyType === "audio") {
+
+      const ttsRes = await axios.post(
+        "https://api.openai.com/v1/audio/speech",
+        {
+          model: "gpt-4o-mini-tts",
+          voice: "alloy",
+          input: answer
         },
-        responseType: "arraybuffer"
-      }
-    );
-
-    fs.writeFileSync("reply.mp3", ttsRes.data);
-
-    // =========================
-    // ■ LINEに音声で返信
-    // =========================
-    await axios.post(
-      "https://api.line.me/v2/bot/message/reply",
-      {
-        replyToken: event.replyToken,
-        messages: [
-          {
-            type: "audio",
-            originalContentUrl:
-              "https://line-voice-bot-2g4m.onrender.com/reply.mp3",
-            duration: 5000
-          }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${LINE_TOKEN}`,
-          "Content-Type": "application/json"
+        {
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`
+          },
+          responseType: "arraybuffer"
         }
-      }
-    );
+      );
+
+      fs.writeFileSync("reply.mp3", ttsRes.data);
+
+      await axios.post(
+        "https://api.line.me/v2/bot/message/reply",
+        {
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: "audio",
+              originalContentUrl: "https://line-voice-bot-2g4m.onrender.com/reply.mp3",
+              duration: 5000
+            }
+          ]
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${LINE_TOKEN}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+    }
+
+    // =========================
+    // ■ テキストで返す
+    // =========================
+    else {
+      await axios.post(
+        "https://api.line.me/v2/bot/message/reply",
+        {
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: "text",
+              text: answer
+            }
+          ]
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${LINE_TOKEN}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+    }
 
     return res.sendStatus(200);
+
   } catch (error) {
     console.error("エラー内容:", error.response?.data || error.message);
     return res.sendStatus(200);
