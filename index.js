@@ -111,7 +111,7 @@ app.post("/webhook", async (req, res) => {
         "https://api.openai.com/v1/audio/speech",
         {
           model: "gpt-4o-mini-tts",
-          voice: "alloy",
+          voice: "shimmer",
           input: answer
         },
         {
