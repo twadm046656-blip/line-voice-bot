@@ -3,6 +3,7 @@ import axios from "axios";
 import fs from "fs";
 import FormData from "form-data";
 import { google } from "googleapis";
+import { v4 as uuidv4 } from "uuid";
 
 const app = express();
 app.use(express.json());
@@ -164,7 +165,7 @@ app.post("/webhook", async (req, res) => {
       memory = {
         memory_summary: "",
         profile_text: "",
-        conversation_id: "conv_" + userId
+        conversation_id: uuidv4()
       };
     }
 
