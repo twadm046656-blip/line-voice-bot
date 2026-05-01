@@ -37,7 +37,7 @@ const sheets = google.sheets({ version: "v4", auth });
 async function getMemory(userId) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: "Sheet1!A:D"
+    range: "memoryDB!A:D"
   });
 
   const rows = res.data.values || [];
@@ -61,7 +61,7 @@ async function getMemory(userId) {
 async function saveMemory(userId, memory) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: "Sheet1!A:D"
+    range: "memoryDB!A:D"
   });
 
   const rows = res.data.values || [];
@@ -71,7 +71,7 @@ async function saveMemory(userId, memory) {
     if (rows[i][0] === userId) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `Sheet1!A${i + 1}:D${i + 1}`,
+        range: `memoryDB!A${i + 1}:D${i + 1}`,
         valueInputOption: "RAW",
         requestBody: {
           values: [[userId, memory.memory_summary, memory.profile_text, memory.conversation_id]]
@@ -85,7 +85,7 @@ async function saveMemory(userId, memory) {
   if (!found) {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: "Sheet1!A:D",
+      range: "memoryDB!A:D",
       valueInputOption: "RAW",
       requestBody: {
         values: [[userId, memory.memory_summary, memory.profile_text, memory.conversation_id]]
