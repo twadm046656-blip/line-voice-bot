@@ -2,48 +2,121 @@ import express from "express";
 import axios from "axios";
 import fs from "fs";
 import FormData from "form-data";
+import { google } from "googleapis";
 
 const app = express();
 app.use(express.json());
 
-// ■ 環境変数（Renderで設定済みのものを使用）
+// =========================
+// ■ 環境変数
+// =========================
 const LINE_TOKEN = process.env.LINE_TOKEN;
 const DIFY_API = process.env.DIFY_API;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
-// ■ 音声ファイル公開（audio返信用）
+// JSONそのまま入れる（1行）
+const GOOGLE_CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+
+// =========================
+// ■ Google Sheets設定
+// =========================
+const auth = new google.auth.GoogleAuth({
+  credentials: GOOGLE_CREDENTIALS,
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+});
+
+const sheets = google.sheets({ version: "v4", auth });
+
+// =========================
+// ■ memory取得
+// =========================
+async function getMemory(userId) {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: "Sheet1!A:D"
+  });
+
+  const rows = res.data.values || [];
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === userId) {
+      return {
+        memory_summary: rows[i][1] || "",
+        profile_text: rows[i][2] || "",
+        conversation_id: rows[i][3] || "conv_" + userId
+      };
+    }
+  }
+
+  return null;
+}
+
+// =========================
+// ■ memory保存
+// =========================
+async function saveMemory(userId, memory) {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: "Sheet1!A:D"
+  });
+
+  const rows = res.data.values || [];
+  let found = false;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === userId) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `Sheet1!A${i + 1}:D${i + 1}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[userId, memory.memory_summary, memory.profile_text, memory.conversation_id]]
+        }
+      });
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: "Sheet1!A:D",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [[userId, memory.memory_summary, memory.profile_text, memory.conversation_id]]
+      }
+    });
+  }
+}
+
+// =========================
+// ■ 音声ファイル公開
+// =========================
 app.use(express.static("."));
 
 app.post("/webhook", async (req, res) => {
   try {
     const events = req.body.events;
-
-    // ■ eventsなし（検証対策）
-    if (!events || events.length === 0) {
-      return res.sendStatus(200);
-    }
+    if (!events || events.length === 0) return res.sendStatus(200);
 
     const event = events[0];
+    if (!event.message) return res.sendStatus(200);
 
-    // ■ messageなし対策
-    if (!event.message) {
-      return res.sendStatus(200);
-    }
+    const userId = event.source.userId || "anonymous";
 
     let userText = "";
-    let replyType = "text"; // デフォルト
+    let replyType = "text";
 
     // =========================
-    // ■ 音声メッセージ
+    // ■ 音声
     // =========================
     if (event.message.type === "audio") {
       replyType = "audio";
 
-      const messageId = event.message.id;
-
-      // LINEから音声取得
       const audio = await axios.get(
-        `https://api-data.line.me/v2/bot/message/${messageId}/content`,
+        `https://api-data.line.me/v2/bot/message/${event.message.id}/content`,
         {
           headers: { Authorization: `Bearer ${LINE_TOKEN}` },
           responseType: "arraybuffer"
@@ -52,7 +125,6 @@ app.post("/webhook", async (req, res) => {
 
       fs.writeFileSync("audio.m4a", audio.data);
 
-      // Whisperで文字起こし
       const form = new FormData();
       form.append("file", fs.createReadStream("audio.m4a"));
       form.append("model", "whisper-1");
@@ -72,24 +144,41 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========================
-    // ■ テキストメッセージ
+    // ■ テキスト
     // =========================
     else if (event.message.type === "text") {
-      replyType = "text";
       userText = event.message.text;
     } else {
       return res.sendStatus(200);
     }
 
     // =========================
-    // ■ Difyに送信
+    // ■ memory取得
+    // =========================
+    let memory = await getMemory(userId);
+
+    if (!memory) {
+      memory = {
+        memory_summary: "",
+        profile_text: "",
+        conversation_id: "conv_" + userId
+      };
+    }
+
+    // =========================
+    // ■ Dify送信
     // =========================
     const difyRes = await axios.post(
       "https://api.dify.ai/v1/chat-messages",
       {
-        inputs: {},
+        inputs: {
+          memory_summary: memory.memory_summary,
+          profile_text: memory.profile_text
+        },
         query: userText,
-        user: event.source.userId || "anonymous"
+        user: userId,
+        conversation_id: memory.conversation_id,
+        response_mode: "blocking"
       },
       {
         headers: {
@@ -103,10 +192,16 @@ app.post("/webhook", async (req, res) => {
       difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
     // =========================
-    // ■ 音声で返す
+    // ■ memory更新
+    // =========================
+    memory.memory_summary = userText + " → " + answer;
+
+    await saveMemory(userId, memory);
+
+    // =========================
+    // ■ 音声返信
     // =========================
     if (replyType === "audio") {
-
       const ttsRes = await axios.post(
         "https://api.openai.com/v1/audio/speech",
         {
@@ -115,9 +210,7 @@ app.post("/webhook", async (req, res) => {
           input: answer
         },
         {
-          headers: {
-            Authorization: `Bearer ${OPENAI_API_KEY}`
-          },
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
           responseType: "arraybuffer"
         }
       );
@@ -146,19 +239,14 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========================
-    // ■ テキストで返す
+    // ■ テキスト返信
     // =========================
     else {
       await axios.post(
         "https://api.line.me/v2/bot/message/reply",
         {
           replyToken: event.replyToken,
-          messages: [
-            {
-              type: "text",
-              text: answer
-            }
-          ]
+          messages: [{ type: "text", text: answer }]
         },
         {
           headers: {
@@ -170,14 +258,15 @@ app.post("/webhook", async (req, res) => {
     }
 
     return res.sendStatus(200);
-
   } catch (error) {
-    console.error("エラー内容:", error.response?.data || error.message);
+    console.error("エラー:", error.response?.data || error.message);
     return res.sendStatus(200);
   }
 });
 
-// ■ Render用ポート
+// =========================
+// ■ 起動
+// =========================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`サーバー起動: ${PORT}`);
