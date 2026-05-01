@@ -16,8 +16,11 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
 // JSONそのまま入れる（1行）
-const GOOGLE_CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+const raw = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
+raw.private_key = raw.private_key.replace(/\\n/g, "\n");
+
+const GOOGLE_CREDENTIALS = raw;
 // =========================
 // ■ Google Sheets設定
 // =========================
