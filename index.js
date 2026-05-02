@@ -198,10 +198,21 @@ app.post("/webhook", async (req, res) => {
       difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
     // ▼ 分解
-    const answer = text.match(/answer:\s*([\s\S]*?)memory_summary:/)?.[1]?.trim() || text;
-    const memory_summary = text.match(/memory_summary:\s*([\s\S]*?)profile_text:/)?.[1]?.trim() || "";
-    const profile_text = text.match(/profile_text:\s*([\s\S]*)/)?.[1]?.trim() || "";
-    
+    let parsed;
+
+    try {
+      parsed = JSON.parse(difyRes.data.answer);
+    } catch (e) {
+      parsed = {
+        answer: difyRes.data.answer,
+        memory_summary: "",
+        profile_text: ""
+      };
+    }
+
+    const answer = parsed.answer || "";
+    const memory_summary = parsed.memory_summary || "";
+    const profile_text = parsed.profile_text || "";    
     // =========================
     // ■ ★ここが重要（DifyのID保存）
     // =========================
@@ -213,7 +224,7 @@ app.post("/webhook", async (req, res) => {
     // ■ memory更新（Difyの出力を使う）
     // =========================
 
-    if (memory_summary) {
+   if (memory_summary) {
       memory.memory_summary = memory_summary;
     }
 
