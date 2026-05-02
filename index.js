@@ -210,9 +210,16 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========================
-    // ■ memory更新
+    // ■ memory更新（Difyの出力を使う）
     // =========================
-    memory.memory_summary = userText + " → " + answer;
+
+    if (memory_summary) {
+      memory.memory_summary = memory_summary;
+    }
+
+    if (profile_text) {
+      memory.profile_text = profile_text;
+    }
 
     await saveMemory(userId, memory);
 
