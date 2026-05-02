@@ -194,9 +194,14 @@ app.post("/webhook", async (req, res) => {
       }
     );
 
-    const answer =
+    const text =
       difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
+    // ▼ 分解
+    const answer = text.match(/answer:\s*([\s\S]*?)memory_summary:/)?.[1]?.trim() || text;
+    const memory_summary = text.match(/memory_summary:\s*([\s\S]*?)profile_text:/)?.[1]?.trim() || "";
+    const profile_text = text.match(/profile_text:\s*([\s\S]*)/)?.[1]?.trim() || "";
+    
     // =========================
     // ■ ★ここが重要（DifyのID保存）
     // =========================
