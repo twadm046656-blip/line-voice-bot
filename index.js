@@ -3,7 +3,6 @@ import axios from "axios";
 import fs from "fs";
 import FormData from "form-data";
 import { google } from "googleapis";
-import { v4 as uuidv4 } from "uuid";
 
 const app = express();
 app.use(express.json());
@@ -16,17 +15,14 @@ const DIFY_API = process.env.DIFY_API;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
-// JSONそのまま入れる（1行）
+// =========================
+// ■ Google認証
+// =========================
 const raw = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-
 raw.private_key = raw.private_key.replace(/\\n/g, "\n");
 
-const GOOGLE_CREDENTIALS = raw;
-// =========================
-// ■ Google Sheets設定
-// =========================
 const auth = new google.auth.GoogleAuth({
-  credentials: GOOGLE_CREDENTIALS,
+  credentials: raw,
   scopes: ["https://www.googleapis.com/auth/spreadsheets"]
 });
 
@@ -48,7 +44,7 @@ async function getMemory(userId) {
       return {
         memory_summary: rows[i][1] || "",
         profile_text: rows[i][2] || "",
-        conversation_id: rows[i][3] || "conv_" + userId
+        conversation_id: rows[i][3] || ""
       };
     }
   }
@@ -96,7 +92,7 @@ async function saveMemory(userId, memory) {
 }
 
 // =========================
-// ■ 音声ファイル公開
+// ■ 静的ファイル
 // =========================
 app.use(express.static("."));
 
@@ -165,25 +161,31 @@ app.post("/webhook", async (req, res) => {
       memory = {
         memory_summary: "",
         profile_text: "",
-        conversation_id: uuidv4()
+        conversation_id: ""
       };
     }
 
     // =========================
     // ■ Dify送信
     // =========================
+    const payload = {
+      inputs: {
+        memory_summary: memory.memory_summary,
+        profile_text: memory.profile_text
+      },
+      query: userText,
+      user: userId,
+      response_mode: "blocking"
+    };
+
+    // 既存セッションがある場合のみ付与
+    if (memory.conversation_id) {
+      payload.conversation_id = memory.conversation_id;
+    }
+
     const difyRes = await axios.post(
       "https://api.dify.ai/v1/chat-messages",
-      {
-        inputs: {
-          memory_summary: memory.memory_summary,
-          profile_text: memory.profile_text
-        },
-        query: userText,
-        user: userId,
-        conversation_id: memory.conversation_id,
-        response_mode: "blocking"
-      },
+      payload,
       {
         headers: {
           Authorization: `Bearer ${DIFY_API}`,
@@ -194,6 +196,13 @@ app.post("/webhook", async (req, res) => {
 
     const answer =
       difyRes.data.answer || "すみません、うまくお答えできませんでした。";
+
+    // =========================
+    // ■ ★ここが重要（DifyのID保存）
+    // =========================
+    if (difyRes.data.conversation_id) {
+      memory.conversation_id = difyRes.data.conversation_id;
+    }
 
     // =========================
     // ■ memory更新
