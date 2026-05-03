@@ -200,8 +200,9 @@ const text =
 // ■ answer（会話部分）
 // =========================
 const answer =
-  text.match(/answer:\s*([\s\S]*?)■memory_summary■/)?.[1]?.trim()
-  || text;
+  (text.match(/answer:\s*([\s\S]*?)■memory_summary■/)?.[1] || text)
+    .replace(/^answer:\s*/, "")
+    .trim();
 
 // =========================
 // ■ memory（提案履歴）
@@ -227,11 +228,6 @@ const memory_summary =
     // =========================
     // ■ memory更新（Difyの出力を使う）
     // =========================
-console.log("---- DEBUG ----");
-console.log("answer:", answer);
-console.log("memory_summary:", memory_summary);
-console.log("profile_text:", profile_text);
-console.log("userId:", userId);
     
    if (memory_summary) {
       memory.memory_summary = memory_summary;
