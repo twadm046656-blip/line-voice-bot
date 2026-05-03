@@ -193,7 +193,7 @@ app.post("/webhook", async (req, res) => {
         }
       }
     );
-
+console.log("dify:", difyRes.data.answer);
 const text =
   difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
@@ -233,7 +233,6 @@ console.log("answer:", answer);
 console.log("memory_summary:", memory_summary);
 console.log("profile_text:", profile_text);
 console.log("userId:", userId);
-console.log("sheet userId:", rows[i][0]);    
     
    if (memory_summary) {
       memory.memory_summary = memory_summary;
