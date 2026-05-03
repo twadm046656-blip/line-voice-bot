@@ -29,7 +29,7 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 
 // =========================
-// ■ memory取得
+// ■ 取得
 // =========================
 async function getMemory(userId) {
   const res = await sheets.spreadsheets.values.get({
@@ -215,7 +215,7 @@ const profile_text =
 // ■ memory（提案履歴）
 // =========================
 const memory_summary =
-  text.match(/【memory】([\s\S]*?)【profile】/)?.[0]?.trim()
+  text.match(/■memory_summary■([\s\S]*?)■ｐprofile_text■/)?.[0]?.trim()
   || "";
     
     // =========================
