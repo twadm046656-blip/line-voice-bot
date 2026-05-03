@@ -204,19 +204,19 @@ const answer =
   || text;
 
 // =========================
-// ■ profile（プロフィール）
-// =========================
-const profile_text =
-  text.match(/■profile_text■([\s\S]*?)■FIN■/)?.[0]?.trim()
-  || "";
-
-// =========================
 // ■ memory（提案履歴）
 // =========================
 const memory_summary =
   text.match(/■memory_summary■([\s\S]*?)■profile_text■/)?.[0]?.trim()
   || "";
-    
+
+    // =========================
+    // ■ profile（プロフィール）
+    // =========================
+    const profile_text =
+  text.match(/■profile_text■([\s\S]*?)■FIN■/)?.[0]?.trim()
+  || "";
+
     // =========================
     // ■ ★ここが重要（DifyのID保存）
     // =========================
