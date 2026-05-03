@@ -193,7 +193,6 @@ app.post("/webhook", async (req, res) => {
         }
       }
     );
-console.log("dify:", difyRes.data.answer);
 const text =
   difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
@@ -201,14 +200,14 @@ const text =
 // ■ answer（会話部分）
 // =========================
 const answer =
-  text.match(/answer:\s*([\s\S]*?)■profile_text■/)?.[1]?.trim()
+  text.match(/answer:\s*([\s\S]*?)■memory_summary■/)?.[1]?.trim()
   || text;
 
 // =========================
 // ■ profile（プロフィール）
 // =========================
 const profile_text =
-  text.match(/■profile_text■([\s\S]*?)＝＝＝＝＝＝＝＝＝＝＝＝＝/)?.[0]?.trim()
+  text.match(/■profile_text■([\s\S]*?)■FIN■/)?.[0]?.trim()
   || "";
 
 // =========================
