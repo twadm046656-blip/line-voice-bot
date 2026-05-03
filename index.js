@@ -218,7 +218,7 @@ app.post("/webhook", async (req, res) => {
     // =========================
     const answer =
       text.split("■memory_summary■")[0]
-        .replace(/^answer:\s*/, "")
+        .replace(/answer:\s*/, "")
         .trim();
 
     // =========================
