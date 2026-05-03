@@ -228,7 +228,10 @@ const memory_summary =
     // =========================
     // ■ memory更新（Difyの出力を使う）
     // =========================
-
+console.log("---- DEBUG ----");
+console.log("memory_summary:", memory_summary);
+console.log("profile_text:", profile_text);
+    
    if (memory_summary) {
       memory.memory_summary = memory_summary;
     }
