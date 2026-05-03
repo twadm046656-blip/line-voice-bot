@@ -29,12 +29,12 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 
 // =========================
-// ■ 取得
+// ■ memory取得
 // =========================
 async function getMemory(userId) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: "memoryDB!A:D"
+    range: "memoryDB!A:E"
   });
 
   const rows = res.data.values || [];
@@ -44,7 +44,8 @@ async function getMemory(userId) {
       return {
         memory_summary: rows[i][1] || "",
         profile_text: rows[i][2] || "",
-        conversation_id: rows[i][3] || ""
+        suggest_summary: rows[i][3] || "",
+        conversation_id: rows[i][4] || ""
       };
     }
   }
@@ -58,7 +59,7 @@ async function getMemory(userId) {
 async function saveMemory(userId, memory) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: "memoryDB!A:D"
+    range: "memoryDB!A:E"
   });
 
   const rows = res.data.values || [];
@@ -68,10 +69,16 @@ async function saveMemory(userId, memory) {
     if (rows[i][0] === userId) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `memoryDB!A${i + 1}:D${i + 1}`,
+        range: `memoryDB!A${i + 1}:E${i + 1}`,
         valueInputOption: "RAW",
         requestBody: {
-          values: [[userId, memory.memory_summary, memory.profile_text, memory.conversation_id]]
+          values: [[
+            userId,
+            memory.memory_summary,
+            memory.profile_text,
+            memory.suggest_summary,
+            memory.conversation_id
+          ]]
         }
       });
       found = true;
@@ -82,10 +89,16 @@ async function saveMemory(userId, memory) {
   if (!found) {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: "memoryDB!A:D",
+      range: "memoryDB!A:E",
       valueInputOption: "RAW",
       requestBody: {
-        values: [[userId, memory.memory_summary, memory.profile_text, memory.conversation_id]]
+        values: [[
+          userId,
+          memory.memory_summary,
+          memory.profile_text,
+          memory.suggest_summary,
+          memory.conversation_id
+        ]]
       }
     });
   }
@@ -161,6 +174,7 @@ app.post("/webhook", async (req, res) => {
       memory = {
         memory_summary: "",
         profile_text: "",
+        suggest_summary: "",
         conversation_id: ""
       };
     }
@@ -171,14 +185,14 @@ app.post("/webhook", async (req, res) => {
     const payload = {
       inputs: {
         memory_summary: memory.memory_summary,
-        profile_text: memory.profile_text
+        profile_text: memory.profile_text,
+        suggest_summary: memory.suggest_summary
       },
       query: userText,
       user: userId,
       response_mode: "blocking"
     };
 
-    // 既存セッションがある場合のみ付与
     if (memory.conversation_id) {
       payload.conversation_id = memory.conversation_id;
     }
@@ -193,43 +207,52 @@ app.post("/webhook", async (req, res) => {
         }
       }
     );
-const text =
-  difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
-// =========================
-// ■ answer（会話部分）
-// =========================
-const answer =
-  (text.match(/answer:\s*([\s\S]*?)■memory_summary■/)?.[1] || text)
-    .replace(/^answer:\s*/, "")
-    .trim();
+    console.log("answer:", difyRes.data.answer);
 
-// =========================
-// ■ memory（提案履歴）
-// =========================
-const memory_summary =
-  text.match(/■memory_summary■([\s\S]*?)■profile_text■/)?.[0]?.trim()
-  || "";
+    const text =
+      difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
     // =========================
-    // ■ profile（プロフィール）
+    // ■ answer
+    // =========================
+    const answer =
+      text.split("■memory_summary■")[0]
+        .replace(/^answer:\s*/, "")
+        .trim();
+
+    // =========================
+    // ■ memory_summary
+    // =========================
+    const memory_summary =
+      text.match(/■memory_summary■([\s\S]*?)■profile_text■/)?.[1]?.trim()
+      || "";
+
+    // =========================
+    // ■ profile_text
     // =========================
     const profile_text =
-  text.match(/■profile_text■([\s\S]*?)■FIN■/)?.[0]?.trim()
-  || "";
+      text.match(/■profile_text■([\s\S]*?)■suggest_summary■/)?.[1]?.trim()
+      || "";
 
     // =========================
-    // ■ ★ここが重要（DifyのID保存）
+    // ■ suggest_summary（追加）
+    // =========================
+    const suggest_summary =
+      text.match(/■suggest_summary■([\s\S]*?)■FIN■/)?.[1]?.trim()
+      || "";
+
+    // =========================
+    // ■ conversation_id保存
     // =========================
     if (difyRes.data.conversation_id) {
       memory.conversation_id = difyRes.data.conversation_id;
     }
 
     // =========================
-    // ■ memory更新（Difyの出力を使う）
+    // ■ memory更新
     // =========================
-    
-   if (memory_summary) {
+    if (memory_summary) {
       memory.memory_summary = memory_summary;
     }
 
@@ -237,68 +260,31 @@ const memory_summary =
       memory.profile_text = profile_text;
     }
 
+    if (suggest_summary) {
+      memory.suggest_summary = suggest_summary;
+    }
+
     await saveMemory(userId, memory);
 
     // =========================
-    // ■ 音声返信
+    // ■ LINE返信
     // =========================
-    if (replyType === "audio") {
-      const ttsRes = await axios.post(
-        "https://api.openai.com/v1/audio/speech",
-        {
-          model: "gpt-4o-mini-tts",
-          voice: "shimmer",
-          input: answer
-        },
-        {
-          headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-          responseType: "arraybuffer"
+    await axios.post(
+      "https://api.line.me/v2/bot/message/reply",
+      {
+        replyToken: event.replyToken,
+        messages: [{ type: "text", text: answer }]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${LINE_TOKEN}`,
+          "Content-Type": "application/json"
         }
-      );
-
-      fs.writeFileSync("reply.mp3", ttsRes.data);
-
-      await axios.post(
-        "https://api.line.me/v2/bot/message/reply",
-        {
-          replyToken: event.replyToken,
-          messages: [
-            {
-              type: "audio",
-              originalContentUrl: "https://line-voice-bot-2g4m.onrender.com/reply.mp3",
-              duration: 5000
-            }
-          ]
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${LINE_TOKEN}`,
-            "Content-Type": "application/json"
-          }
-        }
-      );
-    }
-
-    // =========================
-    // ■ テキスト返信
-    // =========================
-    else {
-      await axios.post(
-        "https://api.line.me/v2/bot/message/reply",
-        {
-          replyToken: event.replyToken,
-          messages: [{ type: "text", text: answer }]
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${LINE_TOKEN}`,
-            "Content-Type": "application/json"
-          }
-        }
-      );
-    }
+      }
+    );
 
     return res.sendStatus(200);
+
   } catch (error) {
     console.error("エラー:", error.response?.data || error.message);
     return res.sendStatus(200);
