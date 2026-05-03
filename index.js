@@ -194,25 +194,30 @@ app.post("/webhook", async (req, res) => {
       }
     );
 
-    const text =
-      difyRes.data.answer || "すみません、うまくお答えできませんでした。";
+const text =
+  difyRes.data.answer || "すみません、うまくお答えできませんでした。";
 
-    // ▼ 分解
-    let parsed;
+// =========================
+// ■ answer（会話部分）
+// =========================
+const answer =
+  text.match(/answer:\s*([\s\S]*?)＜ユーザープロフィール＞/)?.[1]?.trim()
+  || text;
 
-    try {
-      parsed = JSON.parse(difyRes.data.answer);
-    } catch (e) {
-      parsed = {
-        answer: difyRes.data.answer,
-        memory_summary: "",
-        profile_text: ""
-      };
-    }
+// =========================
+// ■ profile（プロフィール）
+// =========================
+const profile_text =
+  text.match(/＜ユーザープロフィール＞([\s\S]*?)＝＝＝＝＝＝＝＝＝＝＝＝＝/)?.[0]?.trim()
+  || "";
 
-    const answer = parsed.answer || "";
-    const memory_summary = parsed.memory_summary || "";
-    const profile_text = parsed.profile_text || "";    
+// =========================
+// ■ memory（提案履歴）
+// =========================
+const memory_summary =
+  text.match(/【memory】([\s\S]*?)【profile】/)?.[0]?.trim()
+  || "";
+    
     // =========================
     // ■ ★ここが重要（DifyのID保存）
     // =========================
