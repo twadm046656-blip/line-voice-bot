@@ -232,6 +232,8 @@ console.log("---- DEBUG ----");
 console.log("answer:", answer);
 console.log("memory_summary:", memory_summary);
 console.log("profile_text:", profile_text);
+console.log("userId:", userId);
+console.log("sheet userId:", rows[i][0]);    
     
    if (memory_summary) {
       memory.memory_summary = memory_summary;
