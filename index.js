@@ -79,6 +79,7 @@ async function saveMemory(userId, memory) {
 
 // =========================
 // ■ チャットエンドポイント
+// ※ 記憶の処理は全部削除。Difyに投げて返すだけ。
 // =========================
 app.post("/chat", async (req, res) => {
   try {
@@ -88,30 +89,12 @@ app.post("/chat", async (req, res) => {
       return res.status(400).json({ error: "user_id と message は必須です" });
     }
 
-    // memory取得
-    let memory = await getMemory(user_id) || {
-      memory_summary:  "",
-      profile_text:    "",
-      suggest_summary: "",
-      conversation_id: ""
-    };
-
-    // Dify送信
     const payload = {
-      inputs: {
-        memory_summary:  memory.memory_summary,
-        profile_text:    memory.profile_text,
-        suggest_summary: memory.suggest_summary,
-        search_result:   ""
-      },
+      inputs: {},
       query: message,
       user: user_id,
       response_mode: "blocking"
     };
-
-    if (memory.conversation_id) {
-      payload.conversation_id = memory.conversation_id;
-    }
 
     const difyRes = await axios.post(
       "https://api.dify.ai/v1/chat-messages",
@@ -124,41 +107,71 @@ app.post("/chat", async (req, res) => {
       }
     );
 
-    const text = difyRes.data.answer || "";
+    const answer = difyRes.data.answer || "";
 
-    // answerパース
-    const answer = (
-      text.split("■memory_summary■")[0]
-        .replace(/answer:\s*/, "")
-        .trim()
-    ) || text.trim();
-
-    // memoryパース
-    const memory_summary =
-      text.match(/■memory_summary■([\s\S]*?)■profile_text■/)?.[1]?.trim() || "";
-
-    const profile_text =
-      text.match(/■profile_text■([\s\S]*?)■suggest_summary■/)?.[1]?.trim() || "";
-
-    const suggest_summary =
-      text.match(/■suggest_summary■([\s\S]*?)■FIN■/)?.[1]?.trim() || "";
-
-    // memory更新・保存
-    if (difyRes.data.conversation_id) {
-      memory.conversation_id = difyRes.data.conversation_id;
-    }
-    if (memory_summary)  memory.memory_summary  = memory_summary;
-    if (profile_text)    memory.profile_text    = profile_text;
-    if (suggest_summary) memory.suggest_summary = suggest_summary;
-
-    await saveMemory(user_id, memory);
-
-    // JSONで返す
     return res.json({ answer });
 
   } catch (error) {
-    console.error("エラー:", error.response?.data || error.message);
+    console.error("チャットエラー:", error.response?.data || error.message);
     return res.status(500).json({ error: "サーバーエラーが発生しました" });
+  }
+});
+
+// =========================
+// ■ 記憶取得エンドポイント
+// Dify HTTP MEMORY_GET から呼ばれる
+// =========================
+app.get("/memory", async (req, res) => {
+  try {
+    const { user_id } = req.query;
+
+    if (!user_id) {
+      return res.status(400).json({ error: "user_id は必須です" });
+    }
+
+    const memory = await getMemory(user_id);
+
+    // 初回ユーザーは空で返す
+    return res.json({
+      memory_summary:  memory?.memory_summary  || "",
+      profile_text:    memory?.profile_text    || "",
+      suggest_summary: memory?.suggest_summary || "",
+      conversation_id: memory?.conversation_id || ""
+    });
+
+  } catch (error) {
+    console.error("memory取得エラー:", error.message);
+    return res.status(500).json({ error: "サーバーエラー" });
+  }
+});
+
+// =========================
+// ■ 記憶保存エンドポイント
+// Dify HTTP MEMORY_SAVE から呼ばれる
+// =========================
+app.post("/memory", async (req, res) => {
+  try {
+    const { user_id, memory_summary, profile_text, suggest_summary, conversation_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: "user_id は必須です" });
+    }
+
+    const existing = await getMemory(user_id);
+
+    await saveMemory(user_id, {
+      memory_summary:  memory_summary  || existing?.memory_summary  || "",
+      profile_text:    profile_text    || existing?.profile_text    || "",
+      suggest_summary: suggest_summary || existing?.suggest_summary || "",
+      conversation_id: conversation_id || existing?.conversation_id || "",
+      rowIndex:        existing?.rowIndex
+    });
+
+    return res.json({ success: true });
+
+  } catch (error) {
+    console.error("memory保存エラー:", error.message);
+    return res.status(500).json({ error: "サーバーエラー" });
   }
 });
 
